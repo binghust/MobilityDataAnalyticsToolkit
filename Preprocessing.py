@@ -1,33 +1,52 @@
 import numpy as np
 
-dataset_dir = r'D:\Workspace\Datasets\Socail Network Dataset\Location-Based Social Network Dataset'
 
-# get a new dataset by reordering the column loc_ids
-def reorder_dataset(dataset_path_original, dataset_path_new):
-    user_ids, loc_dates, loc_times, latitudes, longitudes, loc_ids_original = np.loadtxt(
-        dataset_path_original,
+# Reorder an array
+def reorder_array(source_array):
+    element_dict = dict(zip(set(source_array), range(0, len(source_array))))
+    target_array = np.array([element_dict[element] for element in source_array])
+    return target_array
+
+
+# Get a new dataset by reordering the column loc_ids
+# implemented in numpy.loadtxt, the first 5 columns in the new dataset contains b'', need to be deleted manually
+# could also be implemented in pandas.read_csv
+def reformat_dataset(source_path, target_path):
+    #  load six columns of the original dataset to a N x 6 ndarray
+    six_columns = np.loadtxt(
+        source_path,
         delimiter='\t',
-        dtype=bytes,
-        # ATTENTION: used to strip b'', maybe run out of memory
-        # dtype= str,
-        # converters={0:lambda x:x.decode(), 1:lambda x:x.decode(), 2:lambda x:x.decode(), 3:lambda x:x.decode(), 4:lambda x:x.decode()},
-        unpack=True)
+        dtype=bytes)
 
-    loc_id_dict = dict(zip(set(loc_ids_original), range(0, len(loc_ids_original))))
-    loc_ids_reordered = [loc_id_dict[loc_id] for loc_id in loc_ids_original]
+    # delete rows including invalid coordinate (0.0, 0.0) or (0, 0)
+    invalid_row_index = []
+    for i, latitude in enumerate(six_columns[:, 3]):
+        if (latitude == b'0.0' or latitude == b'0') and (six_columns[i, 4] == b'0.0' or six_columns[i, 4] == b'0'):
+            invalid_row_index.append(i)
+    six_columns = np.delete(six_columns, invalid_row_index, axis=0)  # axis=0: delete by row, axis=1: delete by column
 
-    # ATTENTION: the first five columns in the new dataset contains b'', should be deleted manully
+    # reverse six columns to keep chronological order
+    six_columns = six_columns[::-1]
+
+    # reorder the column loc_id as a int list loc_ids_reordered
+    loc_ids_reordered = reorder_array(six_columns[:, 5])
+
+    # decode first five columns
+    five_columns = [
+        [x.decode('utf-8') for x in six_columns[row_no, [0, 1, 2, 3, 4]]] for row_no in range(0, len(six_columns))]
+
     np.savetxt(
-        dataset_path_new,
-        np.column_stack((user_ids, loc_dates, loc_times, latitudes, longitudes, loc_ids_reordered)),
+        target_path,
+        np.column_stack((five_columns, loc_ids_reordered)),
         fmt='%s',
         delimiter='\t',
         newline='\r\n')
 
-# brightkite_trajectory_original_path = dataset_dir + r'\SNAP Brightkite\Brightkite_totalCheckins.txt'
-# brightkite_trajectory_new_path = dataset_dir + r'\SNAP Brightkite\Brightkite_totalCheckins_reordered.txt'
-# reorder_dataset(brightkite_trajectory_original_path, brightkite_trajectory_new_path)
 
-gowalla_trajectory_original_path = dataset_dir + r'\SNAP Gowalla\Gowalla_totalCheckins.txt'
-gowalla_trajectory_new_path = dataset_dir + r'\SNAP Gowalla\Gowalla_totalCheckins_reordered.txt'
-reorder_dataset(gowalla_trajectory_original_path, gowalla_trajectory_new_path)
+# reformat_dataset(
+#     r'D:\Workspace\Datasets\Location-Based Social Network\SNAP Gowalla\checkins.txt',
+#     r'D:\Workspace\Datasets\Location-Based Social Network\SNAP Gowalla\checkins_valid_reordered.txt')
+
+reformat_dataset(
+    r'D:\Workspace\Datasets\Location-Based Social Network\SNAP Brightkite\checkins.txt',
+    r'D:\Workspace\Datasets\Location-Based Social Network\SNAP Brightkite\checkins_valid_reordered.txt')
