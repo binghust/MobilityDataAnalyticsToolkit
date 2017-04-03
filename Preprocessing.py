@@ -1,10 +1,7 @@
-import numpy as np
-
-
 # Reorder an array
 def reorder_array(source_array):
     element_dict = dict(zip(set(source_array), range(0, len(source_array))))
-    target_array = np.array([element_dict[element] for element in source_array])
+    target_array = [element_dict[element] for element in source_array]
     return target_array
 
 
@@ -12,37 +9,44 @@ def reorder_array(source_array):
 # implemented in numpy.loadtxt, the first 5 columns in the new dataset contains b'', need to be deleted manually
 # could also be implemented in pandas.read_csv
 def reformat_dataset(source_path, target_path):
-    #  load six columns of the original dataset to a N x 6 ndarray
-    six_columns = np.loadtxt(
-        source_path,
-        delimiter='\t',
-        dtype=bytes)
+    #  open file
+    with open(source_path, 'r') as source_fid:
+        # load the original dataset to a row_num x 6 list
+        data = [row.rstrip('\r\n').split('\t') for row in source_fid]
 
-    # delete rows including invalid coordinate (0.0, 0.0) or (0, 0)
-    invalid_row_index = []
-    for i, latitude in enumerate(six_columns[:, 3]):
-        if (latitude == b'0.0' or latitude == b'0') and (six_columns[i, 4] == b'0.0' or six_columns[i, 4] == b'0'):
-            invalid_row_index.append(i)
-    six_columns = np.delete(six_columns, invalid_row_index, axis=0)  # axis=0: delete by row, axis=1: delete by column
+        # delete rows including invalid coordinate such as lat/lon==0, lat<-90/>90, or lon<-180/>180
+        invalid_row_index = []
+        for row_index in range(len(data)-1, -1, -1):
+            latitude = float(data[row_index][3])
+            longitude = float(data[row_index][4])
+            if (latitude == 0.0 or latitude <= -90.0 or latitude >= 90.0) and \
+                    (longitude == 0.0 or longitude < -180.0 or longitude > 180.0):
+                invalid_row_index.append(row_index + 1)
+                del data[row_index]
+        print('Invalid row(s):', invalid_row_index)
 
-    # reverse six columns to keep chronological order
-    six_columns = six_columns[::-1]
+        # reverse six columns to keep chronological order
+        data = data[::-1]
 
-    # reorder the column loc_id as a int list loc_ids_reordered
-    loc_ids_reordered = reorder_array(six_columns[:, 5])
+        # reorder the 5th column loc_id as a int list loc_ids_reordered
+        loc_ids_raw = [row[5] for row in data]
+        loc_ids_reordered = reorder_array(loc_ids_raw)
 
-    # decode first five columns
-    five_columns = [
-        [x.decode('utf-8') for x in six_columns[row_no, [0, 1, 2, 3, 4]]] for row_no in range(0, len(six_columns))]
+        # write to a new dataset
+        delimiter = '\t'
+        with open(target_path, 'w') as target_fid:
+            for i in range(0, len(data)):
+                row = delimiter.join(data[i][0:5]) + delimiter + str(loc_ids_reordered[i]) + '\r\n'
+                target_fid.write(row)
 
-    np.savetxt(
-        target_path,
-        np.column_stack((five_columns, loc_ids_reordered)),
-        fmt='%s',
-        delimiter='\t',
-        newline='\r\n')
-
-
+# reformat_dataset(
+#     r'D:\Workspace\Datasets\Location-Based Social Network\SNAP Gowalla\checkins_preview.txt',
+#     r'D:\Workspace\Datasets\Location-Based Social Network\SNAP Gowalla\checkins_preview_valid_reordered.txt')
+#
+# reformat_dataset(
+#     r'D:\Workspace\Datasets\Location-Based Social Network\SNAP Brightkite\checkins_preview.txt',
+#     r'D:\Workspace\Datasets\Location-Based Social Network\SNAP Brightkite\checkins_preview_valid_reordered.txt')
+#
 # reformat_dataset(
 #     r'D:\Workspace\Datasets\Location-Based Social Network\SNAP Gowalla\checkins.txt',
 #     r'D:\Workspace\Datasets\Location-Based Social Network\SNAP Gowalla\checkins_valid_reordered.txt')
