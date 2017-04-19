@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="DataSourceManagerImpl" format="xml" hash="142672388">
+    <data-source source="LOCAL" name="Sqlite (Xerial) - checkins.db" uuid="8b069c66-18cf-4a9e-baef-349455baae40">
+      <driver-ref>sqlite.xerial</driver-ref>
+      <synchronize>true</synchronize>
+      <jdbc-driver>org.sqlite.JDBC</jdbc-driver>
+      <jdbc-url>jdbc:sqlite:$PROJECT_DIR$/../../Datasets/Location-Based Social Network/SNAP Brightkite/checkins.db</jdbc-url>
+    </data-source>
+    <data-source source="LOCAL" name="Sqlite (Xerial) - checkins.db [2]" uuid="33629254-50e3-49fa-b120-41fab5379a09">
+      <driver-ref>sqlite.xerial</driver-ref>
+      <synchronize>true</synchronize>
+      <jdbc-driver>org.sqlite.JDBC</jdbc-driver>
+      <jdbc-url>jdbc:sqlite:$PROJECT_DIR$/../../Datasets/Location-Based Social Network/SNAP Gowalla/checkins.db</jdbc-url>
+    </data-source>
+  </component>
+</project>
