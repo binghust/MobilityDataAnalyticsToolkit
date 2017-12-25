@@ -161,23 +161,26 @@ class Preprocessing:
         """
         # Get rowid, userid and locdatetime,
         # where the locdatetime is represented by the quotient of seconds since 1970-01-01 00:00:00 and time_interval.
-        sql_select_all_checkins = ''.join(['SELECT rowid, userid,',
-                                           ' CAST(STRFTIME(\'%s\', locdatetime) AS INTEGER)/', str(interval),
-                                           ' FROM ', source_table_name, ' ORDER BY userid, locdatetime'])
-        self.cursor.execute(sql_select_all_checkins)
-        results = self.cursor.fetchall()
+        sql_select_checkins = ''.join(['SELECT rowid, userid,',
+                                       ' CAST(STRFTIME(\'%s\', locdatetime) AS INTEGER)/', str(interval),
+                                       ' FROM ', source_table_name, ' ORDER BY userid, locdatetime'])
+        self.cursor.execute(sql_select_checkins)
 
         # Take a sample from source table according to the interval.
         sample_rowids = []
         pre_userid = None
         pre_locdatetime = None
-        for rowid, userid, locdatetime in results:
-            # Keep a checkin (rowid) if its userid != previous userid,
-            # or its userid = previous userid but its locdatetime != previous locdatetime
-            if (userid != pre_userid) or (userid == pre_userid and locdatetime != pre_locdatetime):
-                sample_rowids.append(rowid)
-            pre_userid = userid
-            pre_locdatetime = locdatetime
+        while True:
+            results = self.cursor.fetchmany(1000)  # fetchmany() saves much more memory than fetchall()
+            if not results:
+                break
+            for rowid, userid, locdatetime in results:
+                # Keep a checkin (rowid) if its userid != previous userid,
+                # or its userid = previous userid but its locdatetime != previous locdatetime
+                if (userid != pre_userid) or (userid == pre_userid and locdatetime != pre_locdatetime):
+                    sample_rowids.append(rowid)
+                pre_userid = userid
+                pre_locdatetime = locdatetime
 
         # Create a target table.
         target_table_name = ''.join([source_table_name, '_', str(interval)])
@@ -204,21 +207,10 @@ class Preprocessing:
         [0]: delta latitude of a grid, [1]: delta longitude of a grid.
         :return: target_table_name: str, checkins of which the coordinates are represented by grid coordinates.
         """
-        # Get all source checkins.
-        sql_getall = ''.join(['SELECT userid, locdatetime, lon, lat, locid FROM ', source_table_name,
-                              ' ORDER BY userid, locdatetime'])
-        self.cursor.execute(sql_getall)
-        old_checkins = self.cursor.fetchall()
-
-        # Compute grid coordinates for all source checkins.
-        lons = [lon for userid, locdatetime, lon, lat, locid in old_checkins]
-        lats = [lat for userid, locdatetime, lon, lat, locid in old_checkins]
-        min_lon = min(lons)
-        min_lat = min(lats)
-        new_checkins = [(userid, locdatetime,
-                         int((lon - min_lon) / gridmap.granularity[0]),
-                         int((lat - min_lat) / gridmap.granularity[1]),
-                         locid) for userid, locdatetime, lon, lat, locid in old_checkins]
+        # Get min longitude and min latitude.
+        sql_select_min = ''.join(['SELECT MIN(lon), MIN(lat) FROM ', source_table_name])
+        self.cursor.execute(sql_select_min)
+        min_lon, min_lat = self.cursor.fetchone()
 
         # Create a target table.
         target_table_name = ''.join([source_table_name, '_', 'Grid'])
@@ -229,9 +221,12 @@ class Preprocessing:
              ' (userid INTEGER, locdatetime TEXT, gridlon INTEGER, gridlat INTEGER, locid INTEGER)'])
         self.cursor.execute(sql_create_targettable)
 
-        # Insert into the target table the checkins containing grid coordinates.
-        sql_insert_checkins = ''.join(['INSERT INTO ', target_table_name, ' VALUES (?, ?, ?, ?, ?)'])
-        self.cursor.executemany(sql_insert_checkins, new_checkins)
+        # Insert into the target table the checkins by transforming original coordinates to grid coordinates.
+        sql_insert_checkins = ''.join(['INSERT INTO ', target_table_name,
+                                       ' SELECT userid, locdatetime, CAST(((lon - (?)) / ?) AS INTEGER),'
+                                       ' CAST(((lat - (?)) / ?) AS INTEGER), locid ',
+                                       ' FROM ', source_table_name, ' ORDER BY userid, locdatetime ASC'])
+        self.cursor.execute(sql_insert_checkins, (min_lon, gridmap.granularity[0], min_lat, gridmap.granularity[1]))
 
         self.temp_tables.append(target_table_name)
         print('Discretization: ', source_table_name, ' --> ', target_table_name)
@@ -463,4 +458,4 @@ map_ = Map('SF', (-122.521368, -122.356684, 37.706357, 37.817344))
 grid_map = GridMap(map_, (0.0055625, 0.00444375))  # 500 meters x 500 meters
 datetime_range = ('2008-03-21 20:36:21', '2010-10-23 05:22:06')
 min_tracelength = 50
-subsample_interval = 1 * 60 * 60  # seconds
+subsample_interval = 1 * 60 * 60  # in seconds
