@@ -32,7 +32,7 @@ class GridMap(Map):
 
     @staticmethod
     def get_gridnum(grid_ranges):
-        return int((grid_ranges[1] - grid_ranges[0]) * (grid_ranges[3] - grid_ranges[2]))
+        return int((grid_ranges[1] - grid_ranges[0] + 1) * (grid_ranges[3] - grid_ranges[2] + 1))
 
 
 class Preprocessing:
@@ -207,10 +207,10 @@ class Preprocessing:
         [0]: delta latitude of a grid, [1]: delta longitude of a grid.
         :return: target_table_name: str, checkins of which the coordinates are represented by grid coordinates.
         """
-        # Get min longitude and min latitude.
-        sql_select_min = ''.join(['SELECT MIN(lon), MIN(lat) FROM ', source_table_name])
-        self.cursor.execute(sql_select_min)
-        min_lon, min_lat = self.cursor.fetchone()
+        # # Get min longitude and min latitude.
+        # sql_select_min = ''.join(['SELECT MIN(lon), MIN(lat) FROM ', source_table_name])
+        # self.cursor.execute(sql_select_min)
+        # min_lon, min_lat = self.cursor.fetchone()
 
         # Create a target table.
         target_table_name = ''.join([source_table_name, '_', 'Grid'])
@@ -222,11 +222,13 @@ class Preprocessing:
         self.cursor.execute(sql_create_targettable)
 
         # Insert into the target table the checkins by transforming original coordinates to grid coordinates.
-        sql_insert_checkins = ''.join(['INSERT INTO ', target_table_name,
-                                       ' SELECT userid, locdatetime, CAST(((lon - (?)) / ?) AS INTEGER),'
-                                       ' CAST(((lat - (?)) / ?) AS INTEGER), locid ',
-                                       ' FROM ', source_table_name, ' ORDER BY userid, locdatetime ASC'])
-        self.cursor.execute(sql_insert_checkins, (min_lon, gridmap.granularity[0], min_lat, gridmap.granularity[1]))
+        sql_insert_checkins = ''.join([
+            'INSERT INTO ', target_table_name,
+            ' SELECT userid, locdatetime,',
+            ' CAST(((lon - (SELECT MIN(lon) FROM ', source_table_name, ')) / ?) AS INTEGER) AS gridlon,',
+            ' CAST(((lat - (SELECT MIN(lat) FROM ', source_table_name, ')) / ?) AS INTEGER) AS gridlat, locid',
+            ' FROM ', source_table_name, ' ORDER BY userid, locdatetime ASC'])
+        self.cursor.execute(sql_insert_checkins, (gridmap.granularity[0], gridmap.granularity[1]))
 
         self.temp_tables.append(target_table_name)
         print('Discretization: ', source_table_name, ' --> ', target_table_name)
