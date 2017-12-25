@@ -32,7 +32,94 @@ def load_edges(source_name):
         return dok_matrix(mmread(fid), dtype=np.int8)
 
 
+def plot_checkin_num_distribution_by_date():
+    # Connect to sqlite database. Database file should be placed under current directory.
+    conn = sq.connect('checkins.db')
+    cursor = conn.cursor()
+
+    # Get checkin count.
+    cursor.execute('SELECT count(*) FROM Checkins')
+    result = cursor.fetchall()
+    checkin_num = result[0][0]
+
+    # Plot
+
+    plt.show()
+
+    # Close connection to database.
+    cursor.close()
+    conn.close()
+
+
+def plot_checkin_num_distribution_by_user():
+    # Connect to sqlite database. Database file should be placed under current directory.
+    conn = sq.connect('checkins.db')
+    cursor = conn.cursor()
+
+    # Get checkin count.
+    cursor.execute('SELECT count(*) FROM Checkins')
+    result = cursor.fetchall()
+    checkin_num = result[0][0]
+
+    # Get checkin count of each user.
+    cursor.execute('SELECT userid, count(*) FROM Checkins GROUP BY userid ORDER BY count(*) DESC')
+    result = cursor.fetchall()
+    userids = np.array([userid for userid, checkin_num in result])
+    user_num = userids.size
+    checkin_nums_by_userid = np.array([checkin_num for userid, checkin_num in result])
+
+    # Calulate cumulative distribution of checkin count.
+    checkin_cnt = 0
+    cumulative_distribution = np.empty(user_num, dtype=np.float16)
+    for i in range(0, user_num):
+        checkin_cnt += checkin_nums_by_userid[i]
+        cumulative_distribution[i] = checkin_cnt / checkin_num * 100
+
+    # Plot distribution and cumulative distribution of checkin number in the same figure.
+    xaxis = np.linspace(1, user_num, user_num, dtype=np.uint32)
+    fig = plt.figure(0)
+    ax1 = fig.add_subplot(111)
+    ax1.set_title('Distribution and Cumulative Distribution of Checkin Count')
+    ax1.set_xlabel('number of user')
+    ax1.set_ylabel('percent of checkin count (%)', color='b')
+    ax1.tick_params('y', colors='b')
+    ax1.plot(xaxis, cumulative_distribution, color='b')
+    ax2 = plt.twinx()
+    ax2.set_ylabel('checkin count', color='k')
+    ax2.tick_params('y', colors='k')
+    ax2.scatter(xaxis, checkin_nums_by_userid, color='k')
+    fig.show()
+
+    # Plot distribution and cumulative distribution of checkin count in different figures.
+    xaxis = np.linspace(1, user_num, user_num, dtype=np.uint32)
+    fig_cumulative_distribution = plt.figure(1)
+    ax_cumulative_distribution = fig_cumulative_distribution.add_subplot(111)
+    ax_cumulative_distribution.set_title('Cumulative Distribution of Checkin Count')
+    ax_cumulative_distribution.set_xlabel('user count')
+    ax_cumulative_distribution.set_ylabel('percent of checkin count (%)', color='b')
+    ax_cumulative_distribution.plot(xaxis, cumulative_distribution, color='b')
+    fig_cumulative_distribution.show()
+    fig_distribution = plt.figure(2)
+    ax_distribution = fig_distribution.add_subplot(111)
+    ax_distribution.set_title('Distribution of Checkin Count')
+    ax_distribution.set_xlabel('user count')
+    ax_distribution.set_ylabel('checkin count', color='k')
+    ax_distribution.scatter(xaxis, checkin_nums_by_userid, color='k')
+    fig_distribution.show()
+
+    plt.show()
+
+    # Close connection to database.
+    cursor.close()
+    conn.close()
+
+
 def plot_in_geoplotlib(region_range):
+    """
+    Plot a region on map using geoplotlib
+    :param region_range: 2x2 list, [0][0]: minlongitude, [0][1]: maxlongitude, [1][0]: minlatitude, [1][1]: maxlatitude
+    :return: None
+    """
     import geoplotlib as gp
 
     # Connect to sqlite database. Database file should be placed in current directory.
@@ -52,47 +139,6 @@ def plot_in_geoplotlib(region_range):
     gp.show()
 
     # Close the connection to database.
-    cursor.close()
-    conn.close()
-
-
-def checkin_num_distribution(attribute_name, order=None, order_by_count=None):
-    # Connect to sqlite database. Database file should be placed under current directory.
-    conn = sq.connect('checkins.db')
-    cursor = conn.cursor()
-
-    # Get total number of checkins.
-    cursor.execute('SELECT count(?) FROM Checkins', (attribute_name, ))
-    checkin_total_num = cursor.fetchall()[0][0]
-
-    # Get attibutes of all of users.
-    if order:
-        if order_by_count:
-            cursor.execute('SELECT ' + attribute_name + ', count(*) FROM Checkins GROUP BY ' +
-                           attribute_name + ' ORDER BY count(*) ' + order)
-        else:
-            cursor.execute('SELECT ' + attribute_name + ', count(*) FROM Checkins GROUP BY ' +
-                           attribute_name + ' ORDER BY ' + attribute_name + ' ' + order)
-    else:
-        cursor.execute('SELECT ' + attribute_name + ', count(*) FROM Checkins GROUP BY ' + attribute_name)
-    result = cursor.fetchall()
-    checkin_num_by_attribute = np.array([num[1] for num in result])
-
-    # Calulate cumulative_distribution of checkin number.
-    checkin_count = 0
-    cumulative_distribution = np.empty(checkin_num_by_attribute.size, dtype=np.float16)
-    for i in range(0, checkin_num_by_attribute.size):
-        checkin_count += checkin_num_by_attribute[i]
-        cumulative_distribution[i] = checkin_count / checkin_total_num
-
-    # Plot checkin number and its cumulative_distribution.
-    xaxis = np.linspace(1, checkin_num_by_attribute.size, checkin_num_by_attribute.size, dtype=np.uint32)
-    plt.plot(xaxis, cumulative_distribution)
-    plt.twinx()
-    plt.scatter(xaxis, checkin_num_by_attribute)
-    plt.show()
-
-    # Close connection to database.
     cursor.close()
     conn.close()
 
@@ -197,7 +243,7 @@ def plot_trajectory_by_user(userid):
 
     # plot arrows
     plt.figure()
-    plt.quiver(longitudes[:-1], latitudes[:-1], longitudes[1:]-longitudes[:-1], latitudes[1:]-latitudes[:-1],
+    plt.quiver(longitudes[:-1], latitudes[:-1], longitudes[1:] - longitudes[:-1], latitudes[1:] - latitudes[:-1],
                scale_units='xy', angles='xy', scale=1, width=0.001, headwidth=10, headlength=5)
     plt.show()
 
@@ -207,20 +253,27 @@ def plot_trajectory_by_user(userid):
 
 
 def plot_checkin_frequency_3dhistogram(region_range, delta):
+    """
+    Args:
+        region_range: 2x2 list, [0][0]: minlongitude, [0][1]maxlongitude, [1][0]: minlatitude, [1][1]: maxlatitude.
+        delta: 1x2 list, [0]: deltalongitude, [1]: deltalatitude.
+    Return:
+        None
+    """
     # Connect to sqlite database. Database file should be placed under current directory.
     conn = sq.connect('checkins.db')
     cursor = conn.cursor()
 
     # Get total number of checkins.
-    cursor.execute('SELECT longitude, latitude FROM Checkins WHERE '
-                   'longitude BETWEEN ' + str(region_range[0][0]) + ' AND ' + str(region_range[0][1]) + ' AND '
-                   'latitude BETWEEN ' + str(region_range[1][0]) + ' AND ' + str(region_range[1][1]))
+    cursor.execute('SELECT longitude, latitude FROM Checkins'
+                   ' WHERE longitude BETWEEN ? AND ? AND latitude BETWEEN ? AND ?',
+                   (region_range[0][0], region_range[0][1], region_range[1][0], region_range[1][1]))
     locations = cursor.fetchall()
     lons = np.array([location[0] for location in locations])
     lats = np.array([location[1] for location in locations])
 
-    bin_num = int(max((region_range[0][1]-region_range[0][0])/delta[0],
-                      (region_range[1][1]-region_range[1][0])/delta[1]))
+    bin_num = int(max((region_range[0][1] - region_range[0][0]) / delta[0],
+                      (region_range[1][1] - region_range[1][0]) / delta[1]))
     print(bin_num)
     heatmap, xedges, yedges = np.histogram2d(lons, lats, bins=bin_num)
     extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
@@ -234,15 +287,15 @@ def plot_checkin_frequency_3dhistogram(region_range, delta):
     conn.close()
 
 
-# if choose_dataset('Gowalla'):
-if choose_dataset('Brightkite'):
+if choose_dataset('Gowalla'):
+# if choose_dataset('Brightkite'):
     # edge = load_edges('edges_preview_in_sparse_matrix.dat')
-    # plot_in_geoplotlib([[-74.042580, -73.691646], [40.538534, 40.912725]])
+    plot_in_geoplotlib([[-122.521368, -122.356684], [37.706357, 37.817344]])  # Brooklyn of New York City
     # plot_locations_by_user()
-    # checkin_num_distribution('userid', 'DESC', True)
-    # checkin_num_distribution('date')
-    # checkin_num_distribution('locatid', 'DESC', True)
-    plot_locations_by_region([[-122.419415, -104.682105], [37.385773, 39.878664]])
+    # plot_checkin_num_distribution_by_user()
+    # plot_checkin_num_distribution('date')
+    # plot_checkin_num_distribution('locatid'
+    # plot_locations_by_region([[-122.419415, -104.682105], [37.385773, 39.878664]])
     # plot_checkin_frequency_3dhistogram([[-74.264309, -74.042580], [40.538534, 40.912725]], [0.01, 0.01]),
     # plot_rectangles()
     # plot_trajectory_by_user(2)
