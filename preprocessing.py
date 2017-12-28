@@ -1,5 +1,6 @@
 # encoding=utf-8
 import numpy as np
+import os
 import sqlite3 as sq
 
 
@@ -455,9 +456,42 @@ class Preprocessing:
         self.target_checkins = self.temp_tables[-1]
 
 
+def main():
+    # 0. choose a dataset
+    # os.chdir('D:\\Workspace\\Datasets\\Location-Based Social Network\\SNAP Brightkite')
+    os.chdir('D:\\Workspace\\Datasets\\Location-Based Social Network\\SNAP Gowalla')
+
+    p = Preprocessing('checkins.db', 'Checkins', 'Edges')
+
+    # # 0. dump data in csv files into database.
+    # p.reformat_checkins('checkins.txt', 'checkins_valid_reordered.txt')
+    # p.split_checkins_by_user('checkins_valid_reordered.txt')
+    # uservalidity, startend, datetime, location, locatid = p.Preprocessing.load_chekins()
+    # edge = p.load_edges('edges_preview_in_sparse_matrix.dat')
+
+    # 1. checkins preprocessing.
+    target_checkins = p.start()
+    target_checkins = p.filter_by_region(target_checkins, map_)
+    target_checkins = p.filter_by_datetime(target_checkins, datetime_range)
+    target_checkins = p.subsample(target_checkins, subsample_interval)
+    target_checkins = p.filter_by_tracelength(target_checkins, min_tracelength)
+    target_checkins = p.discretization(target_checkins, grid_map)
+    p.create_checkins_index(target_checkins)
+
+    # 2. edges preprocessing
+    target_edges = p.source_edges + target_checkins.replace(p.source_checkins, '')
+    p.filter_edges(p.source_edges, target_edges, target_checkins)
+
+    # 3. Clean temp tables, compact the database file and close connection to database.
+    p.stop(clean=True, compact=True)
+
+
 # San Francisco in Brightkite with users whose trajectory's length >= 50.
 map_ = Map('SF', (-122.521368, -122.356684, 37.706357, 37.817344))
 grid_map = GridMap(map_, (0.0055625, 0.00444375))  # 500 meters x 500 meters
 datetime_range = ('2008-03-21 20:36:21', '2010-10-23 05:22:06')
 min_tracelength = 50
 subsample_interval = 1 * 60 * 60  # in seconds
+
+if __name__ == '__main__':
+    main()
