@@ -12,6 +12,9 @@
       <synchronize>true</synchronize>
       <jdbc-driver>org.sqlite.JDBC</jdbc-driver>
       <jdbc-url>jdbc:sqlite:$PROJECT_DIR$/../../Datasets/Location-Based Social Network/SNAP Gowalla/checkins.db</jdbc-url>
+      <driver-properties>
+        <property name="synchronous" value="FULL" />
+      </driver-properties>
     </data-source>
   </component>
 </project>
