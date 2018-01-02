@@ -486,8 +486,12 @@ def main():
     p.stop(clean=True, compact=True)
 
 
+map_austin = Map('Austin', (-97.7714033167, -97.5977249833, 30.19719445, 30.4448463144))
+map_sf = Map('SF', (-122.521368, -122.356684, 37.706357, 37.817344))
+map_sto = Map('Stockholm', (17.911736377, 18.088630197, 59.1932443, 59.4409599167))
+
 # San Francisco in Brightkite with users whose trajectory's length >= 50.
-map_ = Map('SF', (-122.521368, -122.356684, 37.706357, 37.817344))
+map_ = map_sto
 grid_map = GridMap(map_, (0.0055625, 0.00444375))  # 500 meters x 500 meters
 datetime_range = ('2008-03-21 20:36:21', '2010-10-23 05:22:06')
 min_tracelength = 50
