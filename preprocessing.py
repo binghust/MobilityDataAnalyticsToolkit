@@ -1,4 +1,5 @@
 # encoding=utf-8
+from math import sqrt
 import numpy as np
 import os
 import sqlite3 as sq
@@ -14,18 +15,15 @@ class Map:
 
 
 class GridMap(Map):
-    grid_ranges = None
-    granularity = None
-    grid_num = None
-
     def __init__(self, map__, granularity):
         Map.__init__(self, map__.name, map__.ranges)
         self.grid_ranges = GridMap.get_gridranges(self.ranges, granularity)
         self.granularity = granularity
         self.grid_num = GridMap.get_gridnum(self.grid_ranges)
 
-    def get_gridid(self, grid_coordinate):
-        return grid_coordinate[0] + grid_coordinate[1] * self.grid_ranges[1]
+    @staticmethod
+    def get_gridid(grid_lon_num, lon, lat):
+        return lon + lat * grid_lon_num
 
     @staticmethod
     def get_gridranges(ranges, granularity):
@@ -35,46 +33,40 @@ class GridMap(Map):
     def get_gridnum(grid_ranges):
         return int((grid_ranges[1] - grid_ranges[0] + 1) * (grid_ranges[3] - grid_ranges[2] + 1))
 
+    @staticmethod
+    def get_grid_coordinate(grid_lon_num, grid_id):
+        return grid_id % grid_lon_num, int(grid_lon_num / grid_lon_num)
+
+    @staticmethod
+    def get_eucdistance(grid_lon_num, grid_id1, grid_id2):
+        return sqrt(sum([(a - b) ** 2 for a, b in
+                         zip(GridMap.get_grid_coordinate(grid_lon_num, grid_id1),
+                             GridMap.get_grid_coordinate(grid_lon_num, grid_id2))]))
+
 
 class Preprocessing:
-    source_checkins = None
-    source_edges = None
-    conn = None
-    cursor = None
-    temp_tables = []
-    target_checkins = None
-    target_edges = None
-
     def __init__(self, source_dbfile, source_checkin, source_edges):
         self.source_checkins = source_checkin
         self.source_edges = source_edges
-        Preprocessing.connect2db(self, source_dbfile)
-
-    def connect2db(self, source_dbfile):
-        # Connect to sqlite database. Database file should be placed under current directory.
         self.conn = sq.connect(source_dbfile)
         self.cursor = self.conn.cursor()
+        self.temp_tables = []
+        self.target_checkins = None
+        self.target_edges = None
 
     def start(self):
         """
         Create and initiate a target table to store preprocessed checkins.
         :return: target_table_name: str, a target table to store preprocessed checkins.
         """
-        # Create a target table to store preprocessed checkins.
+        # Create a target table to store preprocessed checkins and copy checkins in the source table into it.
         target_table_name = self.source_checkins + '_'
-        sql_drop_oldtargettable = ''.join(['DROP TABLE', ' IF EXISTS ', target_table_name])
-        self.cursor.execute(sql_drop_oldtargettable)
-        sql_create_targettable = ''.join(['CREATE TABLE ', target_table_name,
-                                          ' (userid INTEGER, locdatetime TEXT, lon REAL, lat REAL, locid INTEGER)'])
-        self.cursor.execute(sql_create_targettable)
-
-        # Copy checkins in the source table into the new table.
-        # All preprocessions followed will be done on the new table.
-        sql_copyall = ''.join(['INSERT INTO ', target_table_name,
-                               ' SELECT userid, locdatetime, lon, lat, locid FROM ', self.source_checkins,
-                               ' ORDER BY userid, locdatetime ASC'])
-        self.cursor.execute(sql_copyall)
-
+        sql_copy_table = ''.join(['DROP TABLE', ' IF EXISTS ', target_table_name,
+                                  ';CREATE TABLE ', target_table_name,
+                                  ' AS SELECT userid, locdatetime, lon, lat, locid',
+                                  ' FROM ', self.source_checkins,
+                                  ' ORDER BY userid, locdatetime ASC'])
+        self.cursor.executescript(sql_copy_table)
         self.temp_tables.append(target_table_name)
         print('Initiate target table: ', target_table_name)
         return target_table_name
@@ -87,18 +79,15 @@ class Preprocessing:
         [0][0]: minimum longitude, [0][1]: maximum longitude, [1][0]: minimum latitude, [1][1]: maximum latitude.
         :return: target_table_name: str, checkins filtered by a given region range.
         """
-        # Create a target table.
+        # Create a target table to store checkin of which the coordinate is within region_range.
         target_table_name = ''.join([source_table_name, map__.name])
-        sql_drop_oldtargetable = ''.join(['DROP TABLE', ' IF EXISTS ', target_table_name])
-        self.cursor.execute(sql_drop_oldtargetable)
-        sql_create_targettable = ''.join(['CREATE TABLE ', target_table_name,
-                                          ' (userid INTEGER, locdatetime TEXT, lon REAL, lat REAL, locid INTEGER)'])
-        self.cursor.execute(sql_create_targettable)
-
-        # Insert checkin of which the coordinate is within region_range into the target table.
-        sql_filter = ''.join(['INSERT INTO ', target_table_name, ' SELECT * FROM ', source_table_name,
-                              ' WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?'])
-        self.cursor.execute(sql_filter, map__.ranges)
+        sql_drop_table = ''.join(['DROP TABLE', ' IF EXISTS ', target_table_name])
+        self.cursor.execute(sql_drop_table)
+        sql_create_table = ''.join(['CREATE TABLE ', target_table_name,
+                                    ' AS SELECT userid, locdatetime, lon, lat, locid',
+                                    ' FROM ', source_table_name,
+                                    ' WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?'])
+        self.cursor.execute(sql_create_table, map__.ranges)
 
         self.temp_tables.append(target_table_name)
         print('Filtered by region: ', source_table_name, ' --> ', target_table_name)
@@ -113,16 +102,13 @@ class Preprocessing:
         """
         # Create a target table.
         target_table_name = ''.join([source_table_name, '_', 'Time'])
-        sql_drop_oldtargettable = ''.join(['DROP TABLE', ' IF EXISTS ', target_table_name])
-        self.cursor.execute(sql_drop_oldtargettable)
-        sql_create_targettable = ''.join(['CREATE TABLE ', target_table_name,
-                                          '(userid INTEGER, locdatetime TEXT, lon REAL, lat REAL, locid INTEGER)'])
-        self.cursor.execute(sql_create_targettable)
-
-        # Insert the checkin of which the locdatetime is within datatime_range into the target table.
-        sql_filter = ''.join(['INSERT INTO ', target_table_name, ' SELECT * FROM ', source_table_name,
-                              ' WHERE locdatetime BETWEEN \'', ranges[0], '\' AND \'', ranges[1], '\''])
-        self.cursor.execute(sql_filter)
+        sql_drop_table = ''.join(['DROP TABLE', ' IF EXISTS ', target_table_name])
+        self.cursor.execute(sql_drop_table)
+        sql_create_table = ''.join(['CREATE TABLE ', target_table_name,
+                                    ' AS SELECT userid, locdatetime, lon, lat, locid',
+                                    ' FROM ', source_table_name,
+                                    ' WHERE locdatetime BETWEEN ? AND ?'])
+        self.cursor.execute(sql_create_table, ranges)
 
         self.temp_tables.append(target_table_name)
         print('Filtered by datetime: ', source_table_name, ' --> ', target_table_name)
@@ -136,18 +122,15 @@ class Preprocessing:
         :return: target_table_name: str, checkins filtered by a given minimum length of trace.
         """
         # Create a target table to store all records whose
-        target_table_name = ''.join([source_table_name, '_', str(tracelength)])
-        sql_drop_oldtargettable = ''.join(['DROP TABLE', ' IF EXISTS ', target_table_name])
-        self.cursor.execute(sql_drop_oldtargettable)
-        sql_create_targettable = ''.join(['CREATE TABLE ', target_table_name,
-                                          '(userid INTEGER, locdatetime TEXT, lon REAL, lat REAL, locid INTEGER)'])
-        self.cursor.execute(sql_create_targettable)
-
-        # Insert the checkin of which the length is >= tracelength into the target table.
-        sql_filter = ''.join(['INSERT INTO ', target_table_name, ' SELECT * FROM ', source_table_name,
-                              ' WHERE userid IN (SELECT userid FROM ', source_table_name,
-                              ' GROUP BY userid HAVING COUNT(*) >= ?)'])
-        self.cursor.execute(sql_filter, (tracelength,))
+        target_table_name = ''.join([source_table_name, '_Length', str(tracelength)])
+        sql_drop_table = ''.join(['DROP TABLE', ' IF EXISTS ', target_table_name])
+        self.cursor.execute(sql_drop_table)
+        sql_create_table = ''.join(['CREATE TABLE ', target_table_name,
+                                    ' AS SELECT userid, locdatetime, lon, lat, locid',
+                                    ' FROM ', source_table_name,
+                                    ' WHERE userid IN (SELECT userid FROM ', source_table_name,
+                                    ' GROUP BY userid HAVING COUNT(*) >= ?)'])
+        self.cursor.execute(sql_create_table, (tracelength,))
 
         self.temp_tables.append(target_table_name)
         print('Filtered by trace length: ', source_table_name, ' --> ', target_table_name)
@@ -184,23 +167,66 @@ class Preprocessing:
                 pre_locdatetime = locdatetime
 
         # Create a target table.
-        target_table_name = ''.join([source_table_name, '_', str(interval)])
-        sql_drop_oldtargettable = ''.join(['DROP TABLE', ' IF EXISTS ', target_table_name])
-        self.cursor.execute(sql_drop_oldtargettable)
-        sql_create_targettable = ''.join(['CREATE TABLE ', target_table_name,
-                                          '(userid INTEGER, locdatetime TEXT, lon REAL, lat REAL, locid INTEGER)'])
-        self.cursor.execute(sql_create_targettable)
-
-        # Insert sampled checkins into the target table.
-        sql_insert_temptable = ''.join(['INSERT INTO ', target_table_name, ' SELECT * FROM ', source_table_name,
-                                        ' WHERE rowid IN ', str(tuple(sample_rowids))])
-        self.cursor.execute(sql_insert_temptable)
+        target_table_name = ''.join([source_table_name, '_Sample', str(interval)])
+        sql_drop_table = ''.join(['DROP TABLE', ' IF EXISTS ', target_table_name])
+        self.cursor.execute(sql_drop_table)
+        sql_create_table = ''.join(['CREATE TABLE ', target_table_name,
+                                    ' AS SELECT userid, locdatetime, lon, lat, locid',
+                                    ' FROM ', source_table_name,
+                                    ' WHERE rowid IN ', str(tuple(sample_rowids))])
+        self.cursor.execute(sql_create_table)
 
         self.temp_tables.append(target_table_name)
         print('Subsampling: ', source_table_name, ' --> ', target_table_name)
         return target_table_name
 
-    def discretization(self, source_table_name, gridmap):
+    def clustering(self, source_table_name, k=20, method='mini batch k-means'):
+        """
+        Cluster the map into clusters.
+        :param source_table_name: str, datasource
+        :param k: int, number of cluster
+        :param method: str, name of clustering method
+        :return: target_table_name: str, checkins of which the coordinates are represented by cluster tag.
+        """
+        # 0. Create a target table by copying the source table and adding a null column for cluster label.
+        target_table_name = ''.join([source_table_name, '_Cluster', str(k)])
+        sql_create_table = ''.join(['DROP TABLE', ' IF EXISTS ', target_table_name,
+                                    ';CREATE TABLE ', target_table_name,
+                                    ' AS SELECT userid, locdatetime, lon, lat, locid',
+                                    ' FROM ', source_table_name,
+                                    ';ALTER TABLE ', target_table_name,
+                                    ' ADD COLUMN label INTEGER'])
+        self.cursor.executescript(sql_create_table)
+
+        # 1. Begin to cluster.
+        # 1.1 Get checkins with corresponding rowids from database.
+        sql_select_coordinates = ''.join(['SELECT rowid, lon, lat FROM ', target_table_name])
+        # Note that DISTINC shouldn't be used for density-based clustering like DBSCAN.
+        self.cursor.execute(sql_select_coordinates)
+        rowids, lons, lats = zip(*(self.cursor.fetchall()))
+        coordinates = np.column_stack((lons, lats))
+        # 1.2 Choose cluster method.
+        if method == 'k-means':
+            from sklearn.cluster import k_means
+            centroid, label, inertia = k_means(coordinates, k)
+        elif method == 'mini batch k-means':
+            from sklearn.cluster import MiniBatchKMeans
+            estimator = MiniBatchKMeans(n_clusters=k, batch_size=k, n_init=10)
+            estimator.fit(coordinates)
+            label = estimator.labels_
+        else:
+            raise Exception('Wrong clustering method name.')
+        # 1.3 save cluster label to the target table
+        sql_update_label = ''.join(['UPDATE ', target_table_name,
+                                    ' SET label = ?',
+                                    ' WHERE rowid = ?'])
+        self.cursor.executemany(sql_update_label, zip(label.tolist(), rowids))
+
+        self.temp_tables.append(target_table_name)
+        print('Clustering: ', source_table_name, ' --> ', target_table_name)
+        return target_table_name
+
+    def grid(self, source_table_name, gridmap):
         """
         Divide the map into grids.
         :param source_table_name: str, datasource
@@ -208,31 +234,28 @@ class Preprocessing:
         [0]: delta latitude of a grid, [1]: delta longitude of a grid.
         :return: target_table_name: str, checkins of which the coordinates are represented by grid coordinates.
         """
-        # # Get min longitude and min latitude.
-        # sql_select_min = ''.join(['SELECT MIN(lon), MIN(lat) FROM ', source_table_name])
-        # self.cursor.execute(sql_select_min)
-        # min_lon, min_lat = self.cursor.fetchone()
-
-        # Create a target table.
+        # Create a target table to store grid coordinates and gridid.
         target_table_name = ''.join([source_table_name, '_', 'Grid'])
-        sql_drop_oldtargettable = ''.join(['DROP TABLE', ' IF EXISTS ', target_table_name])
-        self.cursor.execute(sql_drop_oldtargettable)
-        sql_create_targettable = ''.join(
-            ['CREATE TABLE ', target_table_name,
-             ' (userid INTEGER, locdatetime TEXT, gridlon INTEGER, gridlat INTEGER, locid INTEGER)'])
-        self.cursor.execute(sql_create_targettable)
-
-        # Insert into the target table the checkins by transforming original coordinates to grid coordinates.
-        sql_insert_checkins = ''.join([
-            'INSERT INTO ', target_table_name,
-            ' SELECT userid, locdatetime,',
-            ' CAST(((lon - (SELECT MIN(lon) FROM ', source_table_name, ')) / ?) AS INTEGER) AS gridlon,',
-            ' CAST(((lat - (SELECT MIN(lat) FROM ', source_table_name, ')) / ?) AS INTEGER) AS gridlat, locid',
-            ' FROM ', source_table_name, ' ORDER BY userid, locdatetime ASC'])
-        self.cursor.execute(sql_insert_checkins, (gridmap.granularity[0], gridmap.granularity[1]))
+        sql_create_table = ''.join(['DROP TABLE', ' IF EXISTS ', target_table_name,
+                                    ';CREATE TABLE ', target_table_name,
+                                    '(userid INTEGER, locdatetime TEXT, lon INTEGER, lat INTEGER, locid INTEGER,',
+                                    ' label INTEGER)'])
+        self.cursor.executescript(sql_create_table)
+        self.conn.create_function('get_gridid', 3, GridMap.get_gridid)
+        sql_create_table = ''.join([
+            ' WITH GRID_CHECKINS AS(SELECT userid, locdatetime, locid,',
+            ' CAST(((lon - (SELECT MIN(lon) FROM ', source_table_name, ')) / ?) AS INTEGER) AS lon,',
+            ' CAST(((lat - (SELECT MIN(lat) FROM ', source_table_name, ')) / ?) AS INTEGER) AS lat',
+            ' FROM ', source_table_name,
+            ' ORDER BY userid, locdatetime ASC)',
+            ' INSERT INTO ', target_table_name,
+            ' SELECT userid, locdatetime, lon, lat, locid, get_gridid(?, lon, lat) AS label',
+            ' FROM GRID_CHECKINS'])
+        self.cursor.execute(sql_create_table,
+                            (gridmap.granularity[0], gridmap.granularity[1], gridmap.grid_ranges[1] + 1))
 
         self.temp_tables.append(target_table_name)
-        print('Discretization: ', source_table_name, ' --> ', target_table_name)
+        print('Grid: ', source_table_name, ' --> ', target_table_name)
         return target_table_name
 
     def create_checkins_index(self, table_name):
@@ -241,11 +264,10 @@ class Preprocessing:
         :param table_name: str, datasource
         :return: nothing
         """
-        sql_drop_oldindex = ''.join(['DROP INDEX', ' IF EXISTS Index_', table_name])
-        self.cursor.execute(sql_drop_oldindex)
-        sql_create_index = ''.join(['CREATE INDEX Index_', table_name, ' ON ', table_name,
-                                    '(userid ASC, locdatetime ASC, gridlon ASC, gridlat ASC, locid ASC)'])
-        self.cursor.execute(sql_create_index)
+        sql_create_index = ''.join(['DROP INDEX', ' IF EXISTS Index_', table_name,
+                                    ';CREATE INDEX Index_', table_name, ' ON ', table_name,
+                                    '(userid ASC, locdatetime ASC, lon ASC, lat ASC, locid ASC)'])
+        self.cursor.executescript(sql_create_index)
         print('Create index on table: ', table_name)
 
     def filter_edges(self, source_table_name, target_table_name, checkin_table_name):
@@ -257,20 +279,13 @@ class Preprocessing:
         :return: nothing
         """
         # Create a target table.
-        sql_drop_oldtargettable = ''.join(['DROP TABLE', ' IF EXISTS ', target_table_name])
-        self.cursor.execute(sql_drop_oldtargettable)
-        sql_create_targettable = ''.join(['CREATE TABLE ', target_table_name, '(userid INTEGER, friendid INTEGER)'])
-        self.cursor.execute(sql_create_targettable)
-
-        # Remove the user from userids and friends.
-        sql_copyall = ''.join(['INSERT INTO ', target_table_name, ' SELECT userid, friendid FROM ', source_table_name])
-        self.cursor.execute(sql_copyall)
-        sql_delete_user = ''.join(['DELETE FROM ', target_table_name,
-                                   ' WHERE userid NOT IN (SELECT userid FROM ', checkin_table_name, ')'])
-        self.cursor.execute(sql_delete_user)
-        sql_delete_friend = ''.join(['DELETE FROM ', target_table_name,
-                                     ' WHERE friendid NOT IN (SELECT userid FROM ', checkin_table_name, ')'])
-        self.cursor.execute(sql_delete_friend)
+        sql_create_table = ''.join(['DROP TABLE', ' IF EXISTS ', target_table_name,
+                                    ';CREATE TABLE ', target_table_name, '(userid INTEGER, friendid INTEGER)',
+                                    ';WITH USERIDS AS (SELECT DISTINCT userid FROM ', checkin_table_name,
+                                    ') INSERT INTO ', target_table_name,
+                                    ' SELECT userid, friendid FROM ', source_table_name,
+                                    ' WHERE userid IN USERIDS AND friendid IN USERIDS'])
+        self.cursor.executescript(sql_create_table)
 
         # Create index.
         sql_create_index = ''.join(['CREATE INDEX Index_', target_table_name, ' ON ', target_table_name,
@@ -475,7 +490,8 @@ def main():
     target_checkins = p.filter_by_datetime(target_checkins, datetime_range)
     target_checkins = p.subsample(target_checkins, subsample_interval)
     target_checkins = p.filter_by_tracelength(target_checkins, min_tracelength)
-    target_checkins = p.discretization(target_checkins, grid_map)
+    target_checkins = p.clustering(target_checkins, k=cluster_num)
+    # target_checkins = p.grid(target_checkins, grid_map)
     p.create_checkins_index(target_checkins)
 
     # 2. edges preprocessing
@@ -483,7 +499,7 @@ def main():
     p.filter_edges(p.source_edges, target_edges, target_checkins)
 
     # 3. Clean temp tables, compact the database file and close connection to database.
-    p.stop(clean=True, compact=True)
+    p.stop(clean=True, compact=False)
 
 
 map_austin = Map('Austin', (-97.7714033167, -97.5977249833, 30.19719445, 30.4448463144))
@@ -492,6 +508,7 @@ map_sto = Map('Stockholm', (17.911736377, 18.088630197, 59.1932443, 59.440959916
 
 # San Francisco in Brightkite with users whose trajectory's length >= 50.
 map_ = map_sto
+cluster_num = 50
 grid_map = GridMap(map_, (0.0055625, 0.00444375))  # 500 meters x 500 meters
 datetime_range = ('2008-03-21 20:36:21', '2010-10-23 05:22:06')
 min_tracelength = 50
