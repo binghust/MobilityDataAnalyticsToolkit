@@ -278,15 +278,39 @@ class Preprocessing:
         :param checkin_table_name: str, a table storing the users that should be kept.
         :return: nothing
         """
-        # Create a target table.
-        sql_create_table = ''.join(['DROP TABLE', ' IF EXISTS ', target_table_name,
-                                    ';CREATE TABLE ', target_table_name, '(userid INTEGER, friendid INTEGER)',
-                                    ';WITH USERIDS AS (SELECT DISTINCT userid FROM ', checkin_table_name,
-                                    ') INSERT INTO ', target_table_name,
-                                    ' SELECT userid, friendid FROM ', source_table_name,
-                                    ' WHERE userid IN USERIDS AND friendid IN USERIDS'])
-        self.cursor.executescript(sql_create_table)
+        sql_select_userids = ''.join(['SELECT DISTINCT userid FROM ', checkin_table_name])
+        self.cursor.execute(sql_select_userids)
+        candidates = [userid[0] for userid in self.cursor.fetchall()]
+        candidates_str = str(tuple(candidates))
 
+        adjecent_list = {}
+        for candidate in candidates:
+            sql_select_friendids = ''.join([
+                'SELECT DISTINCT friendid FROM ', source_table_name,
+                ' WHERE userid = ? AND friendid IN ', candidates_str])
+            self.cursor.execute(sql_select_friendids, (candidate,))
+            friendids = set(friendid[0] for friendid in self.cursor.fetchall())
+            adjecent_list[candidate] = friendids
+
+        while True:
+            invalid_candidate = set()
+            for candidate in adjecent_list.keys():
+                if not adjecent_list[candidate]:
+                    invalid_candidate.add(candidate)
+            if not invalid_candidate:
+                break
+            for candidate in invalid_candidate:
+                del adjecent_list[candidate]
+            for candidate in adjecent_list.keys():
+                adjecent_list[candidate] -= invalid_candidate
+
+        sql_create_table = ''.join(['DROP TABLE', ' IF EXISTS ', target_table_name,
+                                    ';CREATE TABLE ', target_table_name, ' (userid INTEGER, friendid INTEGER)'])
+        self.cursor.executescript(sql_create_table)
+        for candidate in adjecent_list.keys():
+            sql_insert_edges = ''.join(['INSERT INTO ', target_table_name, ' (userid, friendid) VALUES (?, ?)'])
+            friendids = adjecent_list[candidate]
+            self.cursor.executemany(sql_insert_edges, zip([candidate] * len(friendids), friendids))
         # Create index.
         sql_create_index = ''.join(['CREATE INDEX Index_', target_table_name, ' ON ', target_table_name,
                                     '(userid ASC, friendid ASC)'])
