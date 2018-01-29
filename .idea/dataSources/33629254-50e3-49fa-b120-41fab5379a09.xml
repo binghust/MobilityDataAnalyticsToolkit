@@ -115,77 +115,73 @@ locid</ColNames>
       <Position>4</Position>
       <DataType>INT|0</DataType>
     </column>
-    <column id="36" parent="6" name="label">
-      <Position>5</Position>
-      <DataType>INTEGER|0</DataType>
-    </column>
-    <index id="37" parent="6" name="Index_Checkins_Stockholm_Time_Sample3600_Length50_Cluster50">
+    <index id="36" parent="6" name="Index_Checkins_Stockholm_Time_Sample3600_Length50_Cluster50">
       <ColNames>userid
 locdatetime
 lon
 lat
 locid</ColNames>
     </index>
-    <column id="38" parent="7" name="userid">
+    <column id="37" parent="7" name="userid">
       <DataType>integer|0</DataType>
     </column>
-    <column id="39" parent="7" name="friendid">
+    <column id="38" parent="7" name="friendid">
       <Position>1</Position>
       <DataType>integer|0</DataType>
     </column>
-    <index id="40" parent="7" name="Index_Edges">
+    <index id="39" parent="7" name="Index_Edges">
       <ColNames>userid
 friendid</ColNames>
     </index>
-    <column id="41" parent="8" name="userid">
+    <column id="40" parent="8" name="userid">
       <DataType>INTEGER|0</DataType>
     </column>
-    <column id="42" parent="8" name="friendid">
+    <column id="41" parent="8" name="friendid">
       <Position>1</Position>
       <DataType>INTEGER|0</DataType>
     </column>
-    <index id="43" parent="8" name="Index_Edges_Austin_Time_Sample3600_Length100_Cluster50">
+    <index id="42" parent="8" name="Index_Edges_Austin_Time_Sample3600_Length100_Cluster50">
       <ColNames>userid
 friendid</ColNames>
     </index>
-    <column id="44" parent="9" name="userid">
+    <column id="43" parent="9" name="userid">
       <DataType>integer|0</DataType>
     </column>
-    <column id="45" parent="9" name="friendid">
+    <column id="44" parent="9" name="friendid">
       <Position>1</Position>
       <DataType>integer|0</DataType>
     </column>
-    <index id="46" parent="9" name="Index_Edges_Preview">
+    <index id="45" parent="9" name="Index_Edges_Preview">
       <ColNames>userid
 friendid</ColNames>
     </index>
-    <column id="47" parent="10" name="userid">
+    <column id="46" parent="10" name="userid">
       <DataType>INTEGER|0</DataType>
     </column>
-    <column id="48" parent="10" name="friendid">
+    <column id="47" parent="10" name="friendid">
       <Position>1</Position>
       <DataType>INTEGER|0</DataType>
     </column>
-    <index id="49" parent="10" name="Index_Edges_Stockholm_Time_Sample3600_Length50_Cluster50">
+    <index id="48" parent="10" name="Index_Edges_Stockholm_Time_Sample3600_Length50_Cluster50">
       <ColNames>userid
 friendid</ColNames>
     </index>
-    <column id="50" parent="11" name="type">
+    <column id="49" parent="11" name="type">
       <DataType>text|0</DataType>
     </column>
-    <column id="51" parent="11" name="name">
+    <column id="50" parent="11" name="name">
       <Position>1</Position>
       <DataType>text|0</DataType>
     </column>
-    <column id="52" parent="11" name="tbl_name">
+    <column id="51" parent="11" name="tbl_name">
       <Position>2</Position>
       <DataType>text|0</DataType>
     </column>
-    <column id="53" parent="11" name="rootpage">
+    <column id="52" parent="11" name="rootpage">
       <Position>3</Position>
       <DataType>integer|0</DataType>
     </column>
-    <column id="54" parent="11" name="sql">
+    <column id="53" parent="11" name="sql">
       <Position>4</Position>
       <DataType>text|0</DataType>
     </column>

@@ -59,7 +59,7 @@ class Preprocessing:
         Create and initiate a target table to store preprocessed checkins.
         :return: target_table_name: str, a target table to store preprocessed checkins.
         """
-        # Create a target table to store preprocessed checkins and copy checkins in the source table into it.
+        # Create a target table by copying source checkins.
         target_table_name = self.source_checkins + '_'
         sql_copy_table = ''.join(['DROP TABLE', ' IF EXISTS ', target_table_name,
                                   ';CREATE TABLE ', target_table_name,
@@ -79,7 +79,7 @@ class Preprocessing:
         [0][0]: minimum longitude, [0][1]: maximum longitude, [1][0]: minimum latitude, [1][1]: maximum latitude.
         :return: target_table_name: str, checkins filtered by a given region range.
         """
-        # Create a target table to store checkin of which the coordinate is within region_range.
+        # Create a target table to store checkins of which the coordinates are within map__.
         target_table_name = ''.join([source_table_name, map__.name])
         sql_drop_table = ''.join(['DROP TABLE', ' IF EXISTS ', target_table_name])
         self.cursor.execute(sql_drop_table)
@@ -186,16 +186,14 @@ class Preprocessing:
         :param source_table_name: str, datasource
         :param k: int, number of cluster
         :param method: str, name of clustering method
-        :return: target_table_name: str, checkins of which the coordinates are represented by cluster tag.
+        :return: target_table_name: str, checkins of which the coordinates are represented by cluster centers.
         """
         # 0. Create a target table by copying the source table and adding a null column for cluster label.
         target_table_name = ''.join([source_table_name, '_Cluster', str(k)])
         sql_create_table = ''.join(['DROP TABLE', ' IF EXISTS ', target_table_name,
                                     ';CREATE TABLE ', target_table_name,
                                     ' AS SELECT userid, locdatetime, lon, lat, locid',
-                                    ' FROM ', source_table_name,
-                                    ';ALTER TABLE ', target_table_name,
-                                    ' ADD COLUMN label INTEGER'])
+                                    ' FROM ', source_table_name])
         self.cursor.executescript(sql_create_table)
 
         # 1. Begin to cluster.
@@ -208,19 +206,22 @@ class Preprocessing:
         # 1.2 Choose cluster method.
         if method == 'k-means':
             from sklearn.cluster import k_means
-            centroid, label, inertia = k_means(coordinates, k)
+            cluster_centers, label, inertia = k_means(coordinates, k)
         elif method == 'mini batch k-means':
             from sklearn.cluster import MiniBatchKMeans
             estimator = MiniBatchKMeans(n_clusters=k, batch_size=k, n_init=10)
             estimator.fit(coordinates)
-            label = estimator.labels_
+            cluster_centers = [estimator.cluster_centers_[label] for label in estimator.labels_]
         else:
             raise Exception('Wrong clustering method name.')
-        # 1.3 save cluster label to the target table
+        cluster_center_lons, cluster_center_lats = zip(*cluster_centers)
+
+        # 2 save cluster center coordinates to the target table, 
+        # i.e. replace original coordinates with its cluster center's coordinate.
         sql_update_label = ''.join(['UPDATE ', target_table_name,
-                                    ' SET label = ?',
+                                    ' SET lon = ?, lat = ?',
                                     ' WHERE rowid = ?'])
-        self.cursor.executemany(sql_update_label, zip(label.tolist(), rowids))
+        self.cursor.executemany(sql_update_label, zip(cluster_center_lons, cluster_center_lats, rowids))
 
         self.temp_tables.append(target_table_name)
         print('Clustering: ', source_table_name, ' --> ', target_table_name)
@@ -236,23 +237,16 @@ class Preprocessing:
         """
         # Create a target table to store grid coordinates and gridid.
         target_table_name = ''.join([source_table_name, '_', 'Grid'])
-        sql_create_table = ''.join(['DROP TABLE', ' IF EXISTS ', target_table_name,
-                                    ';CREATE TABLE ', target_table_name,
-                                    '(userid INTEGER, locdatetime TEXT, lon INTEGER, lat INTEGER, locid INTEGER,',
-                                    ' label INTEGER)'])
-        self.cursor.executescript(sql_create_table)
-        self.conn.create_function('get_gridid', 3, GridMap.get_gridid)
+        sql_drop_table = ''.join(['DROP TABLE', ' IF EXISTS ', target_table_name])
+        self.cursor.execute(sql_drop_table)
         sql_create_table = ''.join([
-            ' WITH GRID_CHECKINS AS(SELECT userid, locdatetime, locid,',
+            'CREATE TABLE ', target_table_name, ' AS',
+            ' SELECT userid, locdatetime, locid,',
             ' CAST(((lon - (SELECT MIN(lon) FROM ', source_table_name, ')) / ?) AS INTEGER) AS lon,',
             ' CAST(((lat - (SELECT MIN(lat) FROM ', source_table_name, ')) / ?) AS INTEGER) AS lat',
             ' FROM ', source_table_name,
-            ' ORDER BY userid, locdatetime ASC)',
-            ' INSERT INTO ', target_table_name,
-            ' SELECT userid, locdatetime, lon, lat, locid, get_gridid(?, lon, lat) AS label',
-            ' FROM GRID_CHECKINS'])
-        self.cursor.execute(sql_create_table,
-                            (gridmap.granularity[0], gridmap.granularity[1], gridmap.grid_ranges[1] + 1))
+            ' ORDER BY userid, locdatetime ASC'])
+        self.cursor.execute(sql_create_table, (gridmap.granularity[0], gridmap.granularity[1]))
 
         self.temp_tables.append(target_table_name)
         print('Grid: ', source_table_name, ' --> ', target_table_name)
@@ -291,7 +285,6 @@ class Preprocessing:
             self.cursor.execute(sql_select_friendids, (candidate,))
             friendids = set(friendid[0] for friendid in self.cursor.fetchall())
             adjecent_list[candidate] = friendids
-
         while True:
             invalid_candidate = set()
             for candidate in adjecent_list.keys():
@@ -304,6 +297,8 @@ class Preprocessing:
             for candidate in adjecent_list.keys():
                 adjecent_list[candidate] -= invalid_candidate
 
+        # TODO: Now there could be some users who has checkins while has no friends.
+        # These users' checknins need to be deleted, which leads to one more edge-filtering.
         sql_create_table = ''.join(['DROP TABLE', ' IF EXISTS ', target_table_name,
                                     ';CREATE TABLE ', target_table_name, ' (userid INTEGER, friendid INTEGER)'])
         self.cursor.executescript(sql_create_table)
@@ -311,13 +306,19 @@ class Preprocessing:
             sql_insert_edges = ''.join(['INSERT INTO ', target_table_name, ' (userid, friendid) VALUES (?, ?)'])
             friendids = adjecent_list[candidate]
             self.cursor.executemany(sql_insert_edges, zip([candidate] * len(friendids), friendids))
-        # Create index.
-        sql_create_index = ''.join(['CREATE INDEX Index_', target_table_name, ' ON ', target_table_name,
-                                    '(userid ASC, friendid ASC)'])
-        self.cursor.execute(sql_create_index)
 
         self.target_edges = target_table_name
         print('Filtere dges: ', source_table_name, ' --> ', target_table_name)
+
+    def create_edges_index(self, table_name):
+        """
+        Create index on the table storing preprocessed edges.
+        :param table_name: str, datasource
+        :return: nothing
+        """
+        sql_create_index = ''.join(['CREATE INDEX Index_', table_name, ' ON ', table_name,
+                                    '(userid ASC, friendid ASC)'])
+        self.cursor.execute(sql_create_index)
 
     @staticmethod
     def reorder_array(source_array):
@@ -473,7 +474,7 @@ class Preprocessing:
             # Scipy.io.load returns a coo_matrix instead of a dok_matrix.
             return dok_matrix(mmread(fid), dtype=np.int8)
 
-    def stop(self, clean=False, compact=False):
+    def stop(self, clean=True, compact=False):
         if clean:
             Preprocessing.clean(self)
         if compact:
@@ -521,13 +522,14 @@ def main():
     # 2. edges preprocessing
     target_edges = p.source_edges + target_checkins.replace(p.source_checkins, '')
     p.filter_edges(p.source_edges, target_edges, target_checkins)
+    p.create_edges_index(target_edges)
 
     # 3. Clean temp tables, compact the database file and close connection to database.
     p.stop(clean=True, compact=False)
 
 
 map_austin = Map('Austin', (-97.7714033167, -97.5977249833, 30.19719445, 30.4448463144))
-map_sf = Map('SF', (-122.521368, -122.356684, 37.706357, 37.817344))
+map_sanf = Map('SF', (-122.521368, -122.356684, 37.706357, 37.817344))
 map_sto = Map('Stockholm', (17.911736377, 18.088630197, 59.1932443, 59.4409599167))
 
 # San Francisco in Brightkite with users whose trajectory's length >= 50.
