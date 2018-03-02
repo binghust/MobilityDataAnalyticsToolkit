@@ -156,11 +156,11 @@ friendid</ColNames>
 friendid</ColNames>
     </index>
     <column id="46" parent="10" name="userid">
-      <DataType>INTEGER|0</DataType>
+      <DataType>INT|0</DataType>
     </column>
     <column id="47" parent="10" name="friendid">
       <Position>1</Position>
-      <DataType>INTEGER|0</DataType>
+      <DataType>INT|0</DataType>
     </column>
     <index id="48" parent="10" name="Index_Edges_Stockholm_Time_Sample3600_Length50_Cluster50">
       <ColNames>userid

@@ -272,40 +272,30 @@ class Preprocessing:
         :param checkin_table_name: str, a table storing the users that should be kept.
         :return: nothing
         """
-        sql_select_userids = ''.join(['SELECT DISTINCT userid FROM ', checkin_table_name])
-        self.cursor.execute(sql_select_userids)
-        candidates = [userid[0] for userid in self.cursor.fetchall()]
-        candidates_str = str(tuple(candidates))
-
-        adjecent_list = {}
-        for candidate in candidates:
-            sql_select_friendids = ''.join([
-                'SELECT DISTINCT friendid FROM ', source_table_name,
-                ' WHERE userid = ? AND friendid IN ', candidates_str])
-            self.cursor.execute(sql_select_friendids, (candidate,))
-            friendids = set(friendid[0] for friendid in self.cursor.fetchall())
-            adjecent_list[candidate] = friendids
-        while True:
-            invalid_candidate = set()
-            for candidate in adjecent_list.keys():
-                if not adjecent_list[candidate]:
-                    invalid_candidate.add(candidate)
-            if not invalid_candidate:
-                break
-            for candidate in invalid_candidate:
-                del adjecent_list[candidate]
-            for candidate in adjecent_list.keys():
-                adjecent_list[candidate] -= invalid_candidate
-
-        # TODO: Now there could be some users who has checkins while has no friends.
-        # These users' checknins need to be deleted, which leads to one more edge-filtering.
         sql_create_table = ''.join(['DROP TABLE', ' IF EXISTS ', target_table_name,
-                                    ';CREATE TABLE ', target_table_name, ' (userid INTEGER, friendid INTEGER)'])
+                                    ';CREATE TABLE ', target_table_name, ' AS',
+                                    ' SELECT userid as userid, friendid as friendid',
+                                    ' FROM ', source_table_name,
+                                    ' WHERE userid IN ',
+                                    '(SELECT DISTINCT userid',
+                                    ' FROM ', checkin_table_name, ')'])
         self.cursor.executescript(sql_create_table)
-        for candidate in adjecent_list.keys():
-            sql_insert_edges = ''.join(['INSERT INTO ', target_table_name, ' (userid, friendid) VALUES (?, ?)'])
-            friendids = adjecent_list[candidate]
-            self.cursor.executemany(sql_insert_edges, zip([candidate] * len(friendids), friendids))
+
+        while True:
+            sql_delete = ''.join(['DELETE FROM ', target_table_name,
+                                  ' WHERE friendid NOT IN ',
+                                  '(SELECT DISTINCT userid',
+                                  ' FROM ', target_table_name, ')'])
+            self.cursor.execute(sql_delete)
+            if self.cursor.rowcount == 0:
+                break
+
+        sql_delete = ''.join(['DELETE FROM ', checkin_table_name,
+                              ' WHERE userid NOT IN',
+                              '(SELECT DISTINCT userid',
+                              ' FROM ', target_table_name, ')'])
+        self.cursor.execute(sql_delete)
+        print(self.cursor.rowcount)
 
         self.target_edges = target_table_name
         print('Filtere dges: ', source_table_name, ' --> ', target_table_name)
