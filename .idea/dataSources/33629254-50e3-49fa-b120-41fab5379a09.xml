@@ -13,175 +13,187 @@
     <table id="8" parent="2" name="Edges_Austin_Time_Sample3600_Length100_Cluster50"/>
     <table id="9" parent="2" name="Edges_Preview"/>
     <table id="10" parent="2" name="Edges_Stockholm_Time_Sample3600_Length50_Cluster50"/>
-    <table id="11" parent="2" name="sqlite_master"/>
-    <column id="12" parent="3" name="userid">
+    <table id="11" parent="2" name="Edges_Stockholm_Time_Sample3600_Length50_Cluster50_jaccard1"/>
+    <table id="12" parent="2" name="sqlite_master"/>
+    <column id="13" parent="3" name="userid">
       <DataType>integer|0</DataType>
     </column>
-    <column id="13" parent="3" name="locdatetime">
+    <column id="14" parent="3" name="locdatetime">
       <Position>1</Position>
       <DataType>text|0</DataType>
     </column>
-    <column id="14" parent="3" name="lat">
+    <column id="15" parent="3" name="lat">
       <Position>2</Position>
       <DataType>real|0</DataType>
     </column>
-    <column id="15" parent="3" name="lon">
+    <column id="16" parent="3" name="lon">
       <Position>3</Position>
       <DataType>real|0</DataType>
     </column>
-    <column id="16" parent="3" name="locid">
+    <column id="17" parent="3" name="locid">
       <Position>4</Position>
       <DataType>integer|0</DataType>
     </column>
-    <index id="17" parent="3" name="Index_Checkins">
+    <index id="18" parent="3" name="Index_Checkins">
       <ColNames>userid
 locdatetime
 lat
 lon
 locid</ColNames>
     </index>
-    <column id="18" parent="4" name="userid">
+    <column id="19" parent="4" name="userid">
       <DataType>INT|0</DataType>
     </column>
-    <column id="19" parent="4" name="locdatetime">
+    <column id="20" parent="4" name="locdatetime">
       <Position>1</Position>
       <DataType>TEXT|0</DataType>
     </column>
-    <column id="20" parent="4" name="lon">
+    <column id="21" parent="4" name="lon">
       <Position>2</Position>
       <DataType>REAL|0</DataType>
     </column>
-    <column id="21" parent="4" name="lat">
+    <column id="22" parent="4" name="lat">
       <Position>3</Position>
       <DataType>REAL|0</DataType>
     </column>
-    <column id="22" parent="4" name="locid">
+    <column id="23" parent="4" name="locid">
       <Position>4</Position>
       <DataType>INT|0</DataType>
     </column>
-    <column id="23" parent="4" name="label">
+    <column id="24" parent="4" name="label">
       <Position>5</Position>
       <DataType>INTEGER|0</DataType>
     </column>
-    <index id="24" parent="4" name="Index_Checkins_Austin_Time_Sample3600_Length100_Cluster50">
+    <index id="25" parent="4" name="Index_Checkins_Austin_Time_Sample3600_Length100_Cluster50">
       <ColNames>userid
 locdatetime
 lon
 lat
 locid</ColNames>
     </index>
-    <column id="25" parent="5" name="userid">
+    <column id="26" parent="5" name="userid">
       <DataType>integer|0</DataType>
     </column>
-    <column id="26" parent="5" name="locdatetime">
+    <column id="27" parent="5" name="locdatetime">
       <Position>1</Position>
       <DataType>text|0</DataType>
     </column>
-    <column id="27" parent="5" name="lat">
+    <column id="28" parent="5" name="lat">
       <Position>2</Position>
       <DataType>real|0</DataType>
     </column>
-    <column id="28" parent="5" name="lon">
+    <column id="29" parent="5" name="lon">
       <Position>3</Position>
       <DataType>real|0</DataType>
     </column>
-    <column id="29" parent="5" name="locid">
+    <column id="30" parent="5" name="locid">
       <Position>4</Position>
       <DataType>integer|0</DataType>
     </column>
-    <index id="30" parent="5" name="Index_Checkins_Preview">
+    <index id="31" parent="5" name="Index_Checkins_Preview">
       <ColNames>userid
 locdatetime
 lat
 lon
 locid</ColNames>
     </index>
-    <column id="31" parent="6" name="userid">
+    <column id="32" parent="6" name="userid">
       <DataType>INT|0</DataType>
     </column>
-    <column id="32" parent="6" name="locdatetime">
+    <column id="33" parent="6" name="locdatetime">
       <Position>1</Position>
       <DataType>TEXT|0</DataType>
     </column>
-    <column id="33" parent="6" name="lon">
+    <column id="34" parent="6" name="lon">
       <Position>2</Position>
       <DataType>REAL|0</DataType>
     </column>
-    <column id="34" parent="6" name="lat">
+    <column id="35" parent="6" name="lat">
       <Position>3</Position>
       <DataType>REAL|0</DataType>
     </column>
-    <column id="35" parent="6" name="locid">
+    <column id="36" parent="6" name="locid">
       <Position>4</Position>
       <DataType>INT|0</DataType>
     </column>
-    <index id="36" parent="6" name="Index_Checkins_Stockholm_Time_Sample3600_Length50_Cluster50">
+    <index id="37" parent="6" name="Index_Checkins_Stockholm_Time_Sample3600_Length50_Cluster50">
       <ColNames>userid
 locdatetime
 lon
 lat
 locid</ColNames>
     </index>
-    <column id="37" parent="7" name="userid">
+    <column id="38" parent="7" name="userid">
       <DataType>integer|0</DataType>
     </column>
-    <column id="38" parent="7" name="friendid">
+    <column id="39" parent="7" name="friendid">
       <Position>1</Position>
       <DataType>integer|0</DataType>
     </column>
-    <index id="39" parent="7" name="Index_Edges">
+    <index id="40" parent="7" name="Index_Edges">
       <ColNames>userid
 friendid</ColNames>
     </index>
-    <column id="40" parent="8" name="userid">
+    <column id="41" parent="8" name="userid">
       <DataType>INTEGER|0</DataType>
     </column>
-    <column id="41" parent="8" name="friendid">
+    <column id="42" parent="8" name="friendid">
       <Position>1</Position>
       <DataType>INTEGER|0</DataType>
     </column>
-    <index id="42" parent="8" name="Index_Edges_Austin_Time_Sample3600_Length100_Cluster50">
+    <index id="43" parent="8" name="Index_Edges_Austin_Time_Sample3600_Length100_Cluster50">
       <ColNames>userid
 friendid</ColNames>
     </index>
-    <column id="43" parent="9" name="userid">
+    <column id="44" parent="9" name="userid">
       <DataType>integer|0</DataType>
     </column>
-    <column id="44" parent="9" name="friendid">
+    <column id="45" parent="9" name="friendid">
       <Position>1</Position>
       <DataType>integer|0</DataType>
     </column>
-    <index id="45" parent="9" name="Index_Edges_Preview">
+    <index id="46" parent="9" name="Index_Edges_Preview">
       <ColNames>userid
 friendid</ColNames>
     </index>
-    <column id="46" parent="10" name="userid">
+    <column id="47" parent="10" name="userid">
       <DataType>INT|0</DataType>
     </column>
-    <column id="47" parent="10" name="friendid">
+    <column id="48" parent="10" name="friendid">
       <Position>1</Position>
       <DataType>INT|0</DataType>
     </column>
-    <index id="48" parent="10" name="Index_Edges_Stockholm_Time_Sample3600_Length50_Cluster50">
+    <index id="49" parent="10" name="Index_Edges_Stockholm_Time_Sample3600_Length50_Cluster50">
       <ColNames>userid
 friendid</ColNames>
     </index>
-    <column id="49" parent="11" name="type">
+    <column id="50" parent="11" name="userid">
+      <DataType>INT|0</DataType>
+    </column>
+    <column id="51" parent="11" name="friendid">
+      <Position>1</Position>
+      <DataType>INT|0</DataType>
+    </column>
+    <column id="52" parent="11" name="jaccard1">
+      <Position>2</Position>
+      <DataType>|0</DataType>
+    </column>
+    <column id="53" parent="12" name="type">
       <DataType>text|0</DataType>
     </column>
-    <column id="50" parent="11" name="name">
+    <column id="54" parent="12" name="name">
       <Position>1</Position>
       <DataType>text|0</DataType>
     </column>
-    <column id="51" parent="11" name="tbl_name">
+    <column id="55" parent="12" name="tbl_name">
       <Position>2</Position>
       <DataType>text|0</DataType>
     </column>
-    <column id="52" parent="11" name="rootpage">
+    <column id="56" parent="12" name="rootpage">
       <Position>3</Position>
       <DataType>integer|0</DataType>
     </column>
-    <column id="53" parent="11" name="sql">
+    <column id="57" parent="12" name="sql">
       <Position>4</Position>
       <DataType>text|0</DataType>
     </column>
