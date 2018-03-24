@@ -1,37 +1,31 @@
 # encoding=utf-8
-from math import sqrt
-import numpy as np
-import os
 import sqlite3 as sq
+from math import sqrt
+
+import numpy as np
+from dataset import SNAPGowalla, SNAPGowallaAustin
 
 
-class Map:
-    name = None
-    ranges = None
-
-    def __init__(self, name, ranges):
-        self.name = name
-        self.ranges = ranges
-
-
-class GridMap(Map):
-    def __init__(self, map__, granularity):
-        Map.__init__(self, map__.name, map__.ranges)
-        self.grid_ranges = GridMap.get_gridranges(self.ranges, granularity)
+class GridMap:
+    def __init__(self, dataset, granularity):
+        self.name = dataset.name
+        self.ranges = dataset.ranges
         self.granularity = granularity
-        self.grid_num = GridMap.get_gridnum(self.grid_ranges)
+        self.grid_ranges = self.get_gridranges()
+        self.grid_num = self.get_gridnum()
+
+    def get_gridranges(self):
+        return 0, \
+               int((self.ranges[1] - self.ranges[0]) / self.granularity[0]), \
+               0, \
+               int((self.ranges[3] - self.ranges[2]) / self.granularity[1])
+
+    def get_gridnum(self):
+        return int((self.grid_ranges[1] - self.grid_ranges[0] + 1) * (self.grid_ranges[3] - self.grid_ranges[2] + 1))
 
     @staticmethod
     def get_gridid(grid_lon_num, lon, lat):
         return lon + lat * grid_lon_num
-
-    @staticmethod
-    def get_gridranges(ranges, granularity):
-        return 0, int((ranges[1] - ranges[0]) / granularity[0]), 0, int((ranges[3] - ranges[2]) / granularity[1])
-
-    @staticmethod
-    def get_gridnum(grid_ranges):
-        return int((grid_ranges[1] - grid_ranges[0] + 1) * (grid_ranges[3] - grid_ranges[2] + 1))
 
     @staticmethod
     def get_grid_coordinate(grid_lon_num, grid_id):
@@ -45,10 +39,10 @@ class GridMap(Map):
 
 
 class Preprocessing:
-    def __init__(self, source_dbfile, source_checkin, source_edges):
-        self.source_checkins = source_checkin
-        self.source_edges = source_edges
-        self.conn = sq.connect(source_dbfile)
+    def __init__(self, dataset):
+        self.source_checkins = dataset.checkins
+        self.source_edges = dataset.edges
+        self.conn = sq.connect(dataset.url)
         self.cursor = self.conn.cursor()
         self.temp_tables = []
         self.target_checkins = None
@@ -71,23 +65,23 @@ class Preprocessing:
         print('Initiate target table: ', target_table_name)
         return target_table_name
 
-    def filter_by_region(self, source_table_name, map__):
+    def filter_by_region(self, source_table_name, region):
         """
         Select checkins within a given geographical range.
         :param source_table_name: str, datasource.
-        :param map__: Map, map__.name: name of the region, map__.ranges: 2x2 str list,
-        [0][0]: minimum longitude, [0][1]: maximum longitude, [1][0]: minimum latitude, [1][1]: maximum latitude.
+        :param region: Dataset, name: name of the region, ranges: 1x4 float list,
+        [0]: minimum longitude, [1]: maximum longitude, [2]: minimum latitude, [3]: maximum latitude.
         :return: target_table_name: str, checkins filtered by a given region range.
         """
-        # Create a target table to store checkins of which the coordinates are within map__.
-        target_table_name = ''.join([source_table_name, map__.name])
+        # Create a target table to store checkins of which the coordinates are within region_.
+        target_table_name = ''.join([source_table_name, region.name])
         sql_drop_table = ''.join(['DROP TABLE', ' IF EXISTS ', target_table_name])
         self.cursor.execute(sql_drop_table)
         sql_create_table = ''.join(['CREATE TABLE ', target_table_name,
                                     ' AS SELECT userid, locdatetime, lon, lat, locid',
                                     ' FROM ', source_table_name,
                                     ' WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?'])
-        self.cursor.execute(sql_create_table, map__.ranges)
+        self.cursor.execute(sql_create_table, region.ranges)
 
         self.temp_tables.append(target_table_name)
         print('Filtered by region: ', source_table_name, ' --> ', target_table_name)
@@ -116,7 +110,7 @@ class Preprocessing:
 
     def filter_by_tracelength(self, source_table_name, tracelength):
         """
-        Select the user of which the trace's length is not less than a given threshold
+        Select any user of which the trace's length is not less than a given threshold
         :param source_table_name: str, datasource
         :param tracelength: int, minimum length of trace
         :return: target_table_name: str, checkins filtered by a given minimum length of trace.
@@ -138,7 +132,7 @@ class Preprocessing:
 
     def subsample(self, source_table_name, interval):
         """
-        Subsemple checkins according to a given sampling rate.
+        Subsample checkins according to a given sampling rate.
         :param source_table_name: str, datasource
         :param interval: int, second(s)
         :return: target_table_name: str, checkins sampled from source table according to a given sampling rate.
@@ -266,7 +260,7 @@ class Preprocessing:
 
     def filter_edges(self, source_table_name, target_table_name, checkin_table_name):
         """
-        Remove the user whose checkins have been filterred out during the prepreocessing.
+        Remove any user whose checkins have been filterred out.
         :param source_table_name: str, datasource of social edges.
         :param target_table_name: str, a target table storing filered edges.
         :param checkin_table_name: str, a table storing the users that should be kept.
@@ -295,7 +289,6 @@ class Preprocessing:
                               '(SELECT DISTINCT userid',
                               ' FROM ', target_table_name, ')'])
         self.cursor.execute(sql_delete)
-        print(self.cursor.rowcount)
 
         self.target_edges = target_table_name
         print('Filtere dges: ', source_table_name, ' --> ', target_table_name)
@@ -310,160 +303,6 @@ class Preprocessing:
                                     '(userid ASC, friendid ASC)'])
         self.cursor.execute(sql_create_index)
 
-    @staticmethod
-    def reorder_array(source_array):
-        """
-        Reorder an array by unique element
-        :param source_array: 1xn list
-        :return:
-        """
-        element_dict = dict(zip(set(source_array), range(0, len(source_array))))
-        target_array = [element_dict[element] for element in source_array]
-        return target_array
-
-    @staticmethod
-    def reformat_checkins(source_name, target_name):
-        """
-        Save source dataset as a new dataset by reordering its column loc_ids.
-        :param source_name: str, filename of source dataset.
-        :param target_name: str, filename of reformatted dataset.
-        :return:
-        """
-        #  Open file
-        with open(source_name, 'r') as source_fid:
-            # \r, \n and \r\n will be substituted by \n while reading file if the parameter newline is not specified
-            # Load the source checkins to a row_num x 6 list
-            data = [row.rstrip('\n').split('\t') for row in source_fid]
-
-            # Delete rows including invalid coordinate.
-            invalid_row_index = []
-            for row_index in range(len(data) - 1, -1, -1):
-                # Traverse data from tha last row.
-                latitude, longitude = float(data[row_index][3]), float(data[row_index][4])
-                # Invalid coordinate such as lat==0 and lon==0, lat<-80, lat>80, lon<-180, lon>180.
-                if (latitude < -80 or latitude > 80) and (longitude < -180 or longitude > 180) or \
-                        (latitude == 0 and longitude == 0):
-                    invalid_row_index.append(row_index + 1)
-                    del data[row_index]
-
-            # Reverse six columns to keep chronological order
-            data = data[::-1]
-
-            # Reorder the 5th column loc_id as a int list loc_ids_reordered
-            loc_ids_reordered = Preprocessing.reorder_array([row[5] for row in data])
-
-            # Write to a new dataset
-            delimiter = '\t'
-            with open(target_name, 'w') as target_fid:
-                for i in range(0, len(data)):
-                    # \n will be substituted by \r, \n or \r\n  while writing file according to your operation system
-                    # if the parameter newline is not specified
-                    row = delimiter.join([delimiter.join(data[i][0:5]), str(loc_ids_reordered[i])]) + '\n'
-                    # If ended in '\r\n', it will be substituted by '\r\r\n'
-                    target_fid.write(row)
-
-    @staticmethod
-    def split_checkins_by_user(source_name):
-        from datetime import datetime
-
-        with open(source_name, 'r') as source_fid:
-            user_ids, startends_list, datetimes, locations, locat_ids = [], [], [], [], []
-
-            # Traverse checkins by row to find statting row and ending row of each user.
-            start, user_id, user_id_previous, row_index = 0, 0, -1, -1
-            for row in source_fid:
-                row_index += 1
-                elements = row.rstrip('\n').split('\t')
-
-                user_id = int(elements[0])
-                if user_id != user_id_previous:
-                    # Append (start, end) for the previous user.
-                    startends_list.append((user_id_previous, start, row_index - 1))
-                    # Set start for current user.
-                    start = row_index
-                    user_id_previous = user_id
-                user_ids.append(user_id)
-                datetimes.append(datetime.strptime(elements[1] + ' ' + elements[2], '%Y-%m-%d %H:%M:%S'))
-                locations.append((float(elements[3]), float(elements[4])))
-                locat_ids.append(int(elements[5]))
-            # Delete the first element since it is meaningless.
-            del startends_list[0]
-            # Append (start, end) for the last user.
-            startends_list.append((user_id, start, row_index))
-
-            # Convert each an attribute to a numpy.ndarray except for datetimes.
-            user_id_of_last_user = max(user_ids)
-            startends = np.zeros((user_id_of_last_user + 1, 2), dtype=np.uint32)
-            user_validity = np.zeros(user_id_of_last_user + 1, dtype=np.bool_)
-            for row in startends_list:
-                startends[row[0], 0] = row[1]
-                startends[row[0], 1] = row[2]
-                user_validity[row[0]] = True
-            locations, locat_ids = np.array(locations), np.array(locat_ids, dtype=np.uint32)
-
-            # Save each attribute as a dat file respectively.
-            Preprocessing.save((user_validity, startends, datetimes, locations, locat_ids),
-                               (
-                                   'user_validity.dat', 'startends.dat', 'datetimes.dat', 'locations.dat',
-                                   'locat_ids.dat'))
-
-    @staticmethod
-    def save(variables, filenames):
-        """
-        Serilize variable(s) to current directory according to given filename(s).
-        :param variables: 1xn list, variable(s) that need to be saved.
-        :param filenames: 1xn list, filename(s) with respective to each variable.
-        :return: boolean
-        """
-        from pickle import dump
-
-        var_num = len(variables)
-        if var_num == 0 or var_num != len(filenames):
-            return False
-        for i in range(0, var_num):
-            with open(filenames[i], 'wb') as fid:
-                dump(variables[i], fid)
-        return True
-
-    @staticmethod
-    def load_chekins(attribute_name=None):
-        # load serilized variables(checkins) from disk to memory.
-        from pickle import load
-
-        if attribute_name == 'USER_VALIDITY':
-            with open('user_validity.dat', 'rb') as fid:
-                return load(fid)
-        elif attribute_name == 'STARTEND':
-            with open('startends.dat', 'rb') as fid:
-                return load(fid)
-        elif attribute_name == 'DATETIME':
-            with open('datetimes.dat', 'rb') as fid:
-                return load(fid)
-        elif attribute_name == 'LOCATION':
-            with open('locations.dat', 'rb') as fid:
-                return load(fid)
-        elif attribute_name == 'LOCAT_ID':
-            with open('locat_ids.dat', 'rb') as fid:
-                return load(fid)
-        else:
-            with open('user_validity.dat', 'rb') as validity_fid, \
-                    open('startends.dat', 'rb') as startends_fid, \
-                    open('datetimes.dat', 'rb') as datetimes_fid, \
-                    open('locations.dat', 'rb') as locations_fid, \
-                    open('locat_ids.dat', 'rb') as locatids_fid:
-                return load(validity_fid), load(startends_fid), load(datetimes_fid), load(locations_fid), load(
-                    locatids_fid)
-
-    @staticmethod
-    def load_edges(source_name):
-        # load serilized variables(edges) from disk to memory.
-        from scipy.io import mmread
-        from scipy.sparse import dok_matrix
-
-        with open(source_name, 'rb') as fid:
-            # Scipy.io.load returns a coo_matrix instead of a dok_matrix.
-            return dok_matrix(mmread(fid), dtype=np.int8)
-
     def stop(self, clean=True, compact=False):
         if clean:
             Preprocessing.clean(self)
@@ -477,7 +316,7 @@ class Preprocessing:
 
     def clean(self):
         """
-        Drop temp tables during preprocessing.
+        Drop temp tables.
         :return: Nothing
         """
         for table_name in self.temp_tables[:(len(self.temp_tables) - 1)]:
@@ -486,22 +325,21 @@ class Preprocessing:
         self.target_checkins = self.temp_tables[-1]
 
 
-def main():
-    # 0. choose a dataset
-    # os.chdir('D:\\Workspace\\Datasets\\Location-Based Social Network\\SNAP Brightkite')
-    os.chdir('D:\\Workspace\\Datasets\\Location-Based Social Network\\SNAP Gowalla')
+def preprocessing():
+    # 0. choose a dataset and set filtering parameters
+    dataset = SNAPGowalla
+    filter_region = SNAPGowallaAustin
+    cluster_num = 50
+    # grid_map = GridMap(filter_region, (0.0055625, 0.00444375))  # 500 meters x 500 meters
+    datetime_range = ('2008-03-21 20:36:21', '2010-10-23 05:22:06')
+    min_tracelength = 50
+    subsample_interval = 1 * 60 * 60  # in seconds
 
-    p = Preprocessing('checkins.db', 'Checkins', 'Edges')
-
-    # # 0. dump data in csv files into database.
-    # p.reformat_checkins('checkins.txt', 'checkins_valid_reordered.txt')
-    # p.split_checkins_by_user('checkins_valid_reordered.txt')
-    # uservalidity, startend, datetime, location, locatid = p.Preprocessing.load_chekins()
-    # edge = p.load_edges('edges_preview_in_sparse_matrix.dat')
+    p = Preprocessing(dataset)
 
     # 1. checkins preprocessing.
     target_checkins = p.start()
-    target_checkins = p.filter_by_region(target_checkins, map_)
+    target_checkins = p.filter_by_region(target_checkins, filter_region)
     target_checkins = p.filter_by_datetime(target_checkins, datetime_range)
     target_checkins = p.subsample(target_checkins, subsample_interval)
     target_checkins = p.filter_by_tracelength(target_checkins, min_tracelength)
@@ -518,17 +356,5 @@ def main():
     p.stop(clean=True, compact=False)
 
 
-map_austin = Map('Austin', (-97.7714033167, -97.5977249833, 30.19719445, 30.4448463144))
-map_sanf = Map('SF', (-122.521368, -122.356684, 37.706357, 37.817344))
-map_sto = Map('Stockholm', (17.911736377, 18.088630197, 59.1932443, 59.4409599167))
-
-# San Francisco in Brightkite with users whose trajectory's length >= 50.
-map_ = map_sto
-cluster_num = 50
-grid_map = GridMap(map_, (0.0055625, 0.00444375))  # 500 meters x 500 meters
-datetime_range = ('2008-03-21 20:36:21', '2010-10-23 05:22:06')
-min_tracelength = 50
-subsample_interval = 1 * 60 * 60  # in seconds
-
 if __name__ == '__main__':
-    main()
+    preprocessing()
